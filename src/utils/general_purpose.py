@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from math import ceil
 import pandas as pd
 import numpy as np
@@ -228,3 +230,19 @@ def cross_validation_report(estimador,x,y,kfold,lista_score):
         mean_val.append(round(val.mean(),3))
         mean_std.append(round(np.std(val),3))
         print(f"  - {lista_score[i]}_medio: {mean_val[i]} (+/- {mean_std[i]} std)")
+
+def dataframes_charger(filename):
+    """Función que importa el csv deseado desde el directorio
+    
+    -------------------------------------
+    # Args:
+       filename: (str)
+
+    -------------------------------------
+    # Return:
+        pd.DataFrame"""
+
+    current_path = Path(os.getcwd().replace("notebooks","/data/processed/"))
+    file = filename
+    data = pd.read_csv(current_path/file)
+    return data
