@@ -8,6 +8,7 @@ import plotly.express as px
 from sklearn.model_selection import cross_val_score,RepeatedKFold,train_test_split
 from sklearn.compose import make_column_transformer
 from sklearn.feature_selection import RFECV
+import joblib
 
 print("Módulo General Listo Para Usarse \U0001F4BB")
 
@@ -60,7 +61,7 @@ def escalado(scaler,df,output="np.array"):
     return new_df
 
 
-def crossval_models(x,y,folds,estimadores,score):
+def crossval_models(x,y,folds,estimadores,score,limit_chr=40):
     
     """Función que realiza el cross_val_score de diferentes algoritmos y 
     representa el score medio en un gráfico
@@ -70,7 +71,8 @@ def crossval_models(x,y,folds,estimadores,score):
         y = (pd.DataFrame or np.array) target\n
         folds = (int o kfold de sklearn.model_selection)\n
         estimadores = (list) lista de algoritmos\n
-        score = (str) métrica para medir el resultado
+        score = (str) métrica para medir el resultado\n
+        limit_chr = (int) límite de caracteres del nombre del algoritmo a mostrar
 
     ---------------------------------------------
     # Returns:
@@ -96,17 +98,18 @@ def crossval_models(x,y,folds,estimadores,score):
     # creamos un dataframe con los resultados
     cv_frame = pd.DataFrame(
         {
-            "Algorithms":[str(x) for x in estimadores]
+            "Algorithms":[str(x)[:limit_chr] for x in estimadores]
         })
     cv_frame["CrossValMeans"] = cv_means
     cv_frame["CrossValErrors"] = cv_std
     cv_frame = cv_frame.sort_values("CrossValMeans",ascending=False)
-
+    
     # mostramos los resultados en un gráfico
     fig = px.bar(data_frame=cv_frame,x="CrossValMeans",y="Algorithms",
             title="CV Scores Base Line",orientation="h",
             labels={"CrossValMeans":f"Mean {score}"},
             color="Algorithms",error_x=cv_std).update_layout(showlegend=False)
+
     return fig
 
 
@@ -246,3 +249,20 @@ def dataframes_charger(filename):
     file = filename
     data = pd.read_csv(current_path/file)
     return data
+
+def models_saver(object,filename):
+
+    """Función para guardar los modelos de machine learning elegidos en .pkl
+    
+    -----------------------------------
+    # Args:
+        object: objeto con el modelo de machine learning entrenado
+        filename: (str) nombre del archivo pickle a guardar
+        
+    -----------------------------------
+    # Return
+        Guarda el modelo en formato pickle (.pkl)"""
+
+    destino = Path(os.getcwd().replace("notebooks","model"))
+    joblib.dump(value=object,filename=destino/f"{filename}.pkl")
+    print("Modelo guardado correctamente")
