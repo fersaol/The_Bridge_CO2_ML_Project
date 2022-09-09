@@ -1,23 +1,45 @@
 import sys
 import os
+from typing import Union
 from pathlib import Path
-sys.path.append(os.getcwd().replace("notebooks","utils"))
+sys.path.append(os.getcwd().replace("model","utils"))
 
 import pandas as pd
 import numpy as np
-from co2_functions import Clustering
 import general_purpose as gp
 import joblib
 from sklearn.preprocessing import PowerTransformer,RobustScaler
 
 class Final_Model:
 
-    def __init__(self,Country,Year,GDP,Population,Energy_production,Energy_consumption,
-                CO2_emission,energy_type):
+    """Clase que trata los datos y realiza la clusterización, predicción y 
+    clasificación, convina los tres resultados y devuelve una explicación
+    
+    ----------------------------------------------------
+    # Args:
+        Country: (str) country which are refering the forecasts
+        - Year: (str) aaaa-mm-dd format
+        - GDP: (float | int) previsional or real gdp
+        - Population: (float | int) actual population
+        - Energy_production: (float | int) energy production till now or previsional
+        - Energy_consumption: (float | int) energy consumption till now or previsional
+        - CO2_emission: (float | int) co2 emitted till now or previsional
+        - energy_type: (int) one of {0:renewables,1:nuclear,2:gas,3:petroleum and other liquids,4:coal}
+    
+    ------------------------------------------------------
+    # Return
+        if using the run_whole_model() method it runs all the functions and
+        returns a str statement about the classification and the efficiency
+        forecasted."""
+
+    def __init__(self,Country:str,Year:str,GDP:Union[int,float],
+                Population:Union[int,float],Energy_production:Union[int,float],
+                Energy_consumption:Union[int,float],CO2_emission:Union[int,float],
+                energy_type:Union[int,float]):
         self.ruta = Path(os.getcwd().replace("notebooks","model"))
         self.df = gp.dataframes_charger("df_clusters_v1.csv")
         self.Year = Year
-        self.Country = Country
+        self.Country = Country.capitalize()
         self.GDP = GDP
         self.Population = Population
         self.Energy_production = Energy_production
@@ -41,13 +63,35 @@ class Final_Model:
         
         
         
-    def energy_source(self,code):
+    def energy_source(self,code: int) -> str:
+
+        """it takes the energy type code provided when constructing the object and
+        returns the energy type name related with it.
+        
+        --------------------------------------------------------
+        # Args:
+            code: (int) one of {0:renewables,1:nuclear,2:gas,3:petroleum and other liquids,4:coal}
+        
+        ---------------------------------------------------------
+        # Returns:
+            a string with the name related with the code provided."""
+
         df = self.df
         e_types = dict(zip(df.energy_type.unique(),df.Energy_type.unique()))
         return e_types[code]
         
-    def selec_continent(self,country):
-        
+    def selec_continent(self,country: str) -> str:
+
+        """It selects the continent related to the country
+
+        -----------------------------------------------------------
+        # Args:
+            country: (str) the country which data belongs to
+            
+        -----------------------------------------------------------
+        # Returns:
+            a string with the continent related """
+
         df = self.df
         count_groups = df.groupby("continent")["Country"]
         dic_continent = {con:np.unique(coun.values) for con,coun in count_groups}
@@ -56,19 +100,51 @@ class Final_Model:
             if country in dic_continent[cont]:
                 return cont
 
-    def internacional_code(self,country):
+    def internacional_code(self,country: str) -> str:
+
+        """It provides the country's international code for map representation
+        
+        ----------------------------------------------------------
+        # Args:
+            country: (str) the country we want the international code of
+        
+        ----------------------------------------------------------
+        # Returns:
+            a string with the ISO code for the country provided"""
+
         df = self.df
         dic_code = {coun:df.CODE_x.unique()[cod] for cod,
                     coun in enumerate(df.Country.unique())}
         return dic_code[country]
 
-    def coordinates(self,country):
+    def coordinates(self,country: str) -> tuple:
+        """It provides the latitude and logitude related with the country
+        
+        ---------------------------------------------------------
+        # Args:
+            country: (str)
+            
+        ---------------------------------------------------------
+        # Returns:
+            s tuple with the country's coordinates, latitude and longitude"""
+
         df = self.df
         lat_lon = df.groupby("Country")[["latitude","longitude"]].mean()
         dic_coors = {count:lat_lon.loc[count].values for count in lat_lon.index}
         return dic_coors[country]
 
     def registration(self):
+
+        """Updates the source dataframe with the new data provided regardless
+        these are previsional or definitive
+        
+        ----------------------------------------------------------
+        # Args:
+            no args
+            
+        ----------------------------------------------------------
+        # Returns:
+            updates the source dataframe by replacing it with a new one"""
 
         destino = Path(os.getcwd().replace("notebooks","data/processed"))
 
@@ -86,7 +162,16 @@ class Final_Model:
 
         df.to_pickle(destino/"updated_data.pkl")
 
-    def preprocessing(self,escalado):
+    def preprocessing(self,escalado) -> pd.DataFrame:
+
+        """It preprocesses the new data provided so it is usable by the models
+        
+        ----------------------------------------------------------
+        # Args:
+            escalado: (sklearn.preprocesing) a valid scaler form sklearn
+            
+        # Returns:
+            the new data in a pd.Dataframe with column names"""
 
         data_df = self.df
         data_df = data_df.select_dtypes(exclude="object")
@@ -108,7 +193,18 @@ class Final_Model:
                             columns=scaler.get_feature_names_out())
 
 
-    def clustering(self):
+    def clustering(self) -> int:
+
+        """It returns the cluster the data belongs to
+        
+        ---------------------------------------------------------
+        # Args:
+            no args
+            
+        ---------------------------------------------------------
+        # Returns:
+            prediction as integer wich is one of the 4 clusters availables."""
+
         # 1. Preprocesado y selección de variables
         df = self.df_preproc
         clus_df = df[["CO2_emission","Energy_production"]]
@@ -119,7 +215,18 @@ class Final_Model:
         pred = clustering.predict(clus_df)
         return pred
 
-    def regression(self):
+    def regression(self) -> float:
+        
+        """It returns the efficiency value for the data provided
+        
+        ---------------------------------------------------------
+        # Args:
+            no args
+            
+        ---------------------------------------------------------
+        # Returns:
+            prediction as float."""
+
         cluster = Final_Model.clustering(self)
         reg_vars = {
             0:['balance', 'Energy_consumption', 'Energy_production', 'CO2_emission'],
@@ -157,7 +264,19 @@ class Final_Model:
 
         return pred
 
-    def classification(self):
+    def classification(self) -> int:
+        
+        """It returns the class the data belongs to
+        
+        ---------------------------------------------------------
+        # Args:
+            no args
+            
+        ---------------------------------------------------------
+        # Returns:
+            prediction as integer wich is one of the 4 classes a country can
+            belongs to."""
+
         # 1. selección de variables
         vars_rf = ['GDP', 'Population', 'Energy_consumption',
                     'per_capita_production','Energy_intensity_by_GDP', 'balance',
@@ -174,7 +293,21 @@ class Final_Model:
         pred = model_class.predict(clas_df)
         return pred
 
-    def run_whole_model(self):
+    def run_whole_model(self) -> str:
+        
+        """Runs all the needed functions for the whole model and provides with
+        a clear explanaition and recomendations of what means belonging to that
+        cluster.
+        
+        ---------------------------------------------------------
+        # Args:
+            no args
+            
+        ---------------------------------------------------------
+        # Returns:
+            a string with the cluster the country belongs to, its efficiency and
+            a explanation of what means being in that cluster as well as a
+            recommendation."""
 
         tag = Final_Model.classification(self)[0]
         efi = round(Final_Model.regression(self)[0],3)
@@ -190,7 +323,7 @@ with the rest of the world energy producers. The production
 is based on natural gas, petroleum and coal and because of
 this energy mix the co2 emissions are high.
 
------------------------RECOMENDATION----------------------
+-----------------------RECOMMENDATION----------------------
 Your efficiency can improve a lot since your energy production
 mix is not optimal. Focus on changing your energy sources.
 """)
@@ -206,7 +339,7 @@ In this group the production comes mainly from petroleum but
 also from renewables and natural gas. The energy mix is not ideal,
 but the emitted co2 has no great impact on environment
 
---------------------RECOMENDATION-------------------
+--------------------RECOMMENDATION-------------------
 As the production remains steady the country can continues this
 way. But if the aim is to increase energy production the mix
 should be improved in order to lower the co2 emissions. Reinforce
@@ -214,7 +347,7 @@ renewables""")
 
         elif tag == 2:
             print(f"""The efficiency predicted for your country is {efi}, 
-what meansit is classified in the environmental group {tag}.
+what means it is classified in the environmental group {tag}.
 This group is characterized by the following description:
 
 ------VERY HIGH PRODUCTION-VERY HIGH CONTAMINATION------
@@ -223,7 +356,7 @@ you are one of the world's major suppliers. The production in
 this group comes normally from petroleum, coal and natural
 gas
 
------------------------RECOMENDATION---------------------
+-----------------------RECOMMENDATION---------------------
 Your country has great impact on environmental care so it would
 be good diversify the production mix enhancing renewables and
 natural gas if possible. In any case, reducing coal and pretroleum
@@ -238,13 +371,10 @@ This group is characterized by the following description:
 The production amount is good, coming from a good balanced production
 mix and using all of them proportionally.
 
--------------------------RECOMENDATION-----------------------
+-------------------------RECOMMENDATION-----------------------
 Just keep this way, your country is environmental friendly and
 knows how to balance production and world care.
 """)
 
         Final_Model.registration(self)
 
-
-if __name__ == "__main__":
-    Final_Model.run_whole_model()
