@@ -1,0 +1,7 @@
+STREAMLIT:
+- GITHUB REPOSITORY: https://github.com/fersaol/co2-streamlit-webapp
+- URL: https://fersaol-co2-streamlit-webapp-app-uh1z3w.streamlitapp.com/
+
+HEROKU-FLASK:
+-GITHUB REPOSITORY: https://github.com/fersaol/heroku-flask-webapp2
+-URL: https://co2-ml-app.herokuapp.com/
