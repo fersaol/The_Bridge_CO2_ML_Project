@@ -335,8 +335,8 @@ This group is characterized by the following description:
 
 ----------LOW PRODUCTION-LOW CONTAMINATION----------
 The energy production is low but the contamination it also is.
-In this group the production comes mainly from petroleum but
-also from renewables and natural gas. The energy mix is not ideal,
+In this group the production comes mainly from renewables but
+also from nuclear and natural gas. The energy mix is not ideal,
 but the emitted co2 has no great impact on environment
 
 --------------------RECOMMENDATION-------------------

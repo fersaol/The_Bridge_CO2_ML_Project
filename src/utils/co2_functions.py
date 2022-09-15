@@ -12,6 +12,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.model_selection import cross_val_score,KFold
 import seaborn as sns
 from sklearn.feature_selection import RFECV
+from typing import Union
 
 print("Hey!, el módulo co2 ha sido importado correctamente \U0001F973")
 
@@ -23,17 +24,22 @@ class Clustering:
     def __init__(self):
         pass
 
-    def grafico_silueta(df,estimador="k",radio=None,minpts=None,n_clusters=[2,3,4]):
+    def grafico_silueta(df:pd.DataFrame,estimador:str="k",radio:Union[float,int]=None,
+                        minpts:int=None,n_clusters:list=[2,3,4]) -> plt:
+
         """Realiza el gráfico de silueta para el número de clusters elegidos con KMeans o DBSCAN
             
         --------------------------------------
-        Argumentos:
+        # Args:
+            - df = pd.DataFrame
+            - estimador = (str) k=kmeans o d= DBSCAN
+            - radio = (float or int) es el eps de DBSCAN
+            - minpts = (int) min_samples para DBSCAN
+            - n_clusters = (list) lista con los nº de clusters a mostrar para KMeans
         
-        df = pd.DataFrame\n
-        estimador = (str) k=kmeans o d= DBSCAN\n
-        radio = (float or int) es el eps de DBSCAN\n
-        minpts = (int) min_samples para DBSCAN\n
-        n_clusters = (list) lista con los nº de clusters a mostrar para KMeans"""
+        ----------------------------------------
+        # Return:
+            - gráfico de matplotlib.pyplot"""
         
         if estimador == "k":
             for k in n_clusters:
@@ -70,63 +76,82 @@ class Clustering:
             plt.show()
 
         if estimador == "d":
+            try:
+                fig,ax= plt.subplots(1)
+                fig.set_size_inches(25, 7)
+                km = DBSCAN(eps=radio,min_samples=minpts)
+                labels = km.fit_predict(df)
+                labels_1 = np.array([x for x in labels if x != -1])
+                df2 = df.drop(index=np.where(labels==-1)[0])
+                silhouette_vals = silhouette_samples(df2, labels_1)
+
+                y_lower, y_upper = 0, 0
+                for i, cluster in enumerate(np.unique(labels_1)):
+                    cluster_silhouette_vals = silhouette_vals[labels_1 == cluster]
+                    cluster_silhouette_vals.sort()
+                    y_upper += len(cluster_silhouette_vals)
+
+                    plt.barh(range(y_lower, y_upper), cluster_silhouette_vals, 
+                                    edgecolor='none', height=1,alpha=0.6)
+                    plt.text(-0.03, (y_lower + y_upper) / 2, str(i + 1),
+                                    weight="bold",fontsize="medium")
+                    y_lower += len(cluster_silhouette_vals)
+
             
-            fig,ax= plt.subplots(1)
-            fig.set_size_inches(25, 7)
-            km = DBSCAN(eps=radio,min_samples=minpts)
-            labels = km.fit_predict(df)
-            labels_1 = np.array([x for x in labels if x != -1])
-            df2 = df.drop(index=np.where(labels==-1)[0])
-            silhouette_vals = silhouette_samples(df2, labels_1)
+                avg_score = np.mean(silhouette_vals)
+                plt.axvline(avg_score, linestyle='--', linewidth=5, color='red')
+                plt.annotate(f"Silhouette Score:{round(avg_score,3)}",
+                            xy=(avg_score*1.1,y_upper/10),
+                            fontsize="x-large",fontfamily="fantasy")
+                plt.xlim([-0.06, 1])
+                plt.xlabel('Silhouette coefficient values')
+                plt.ylabel('Cluster labels')
+                plt.title('--Silhouette plot for {} clusters--'.format(len(np.unique(km.labels_))-1),
+                            y=1.02,fontsize="x-large",weight="bold",fontfamily="monospace",
+                            bbox=dict(boxstyle="Round4",alpha=0.3,color="grey"))
+                plt.show()
+            except:
+                print("""
+You should change radio and min_samples as it has just made one cluster,beeing 
+this -1 (noise), so it is not possible to draw a graph. Probably it would be a
+good thing to change the estimator as this is not appropriate for your dataset.
+It could also help scaling the values.""")
 
-            y_lower, y_upper = 0, 0
-            for i, cluster in enumerate(np.unique(labels_1)):
-                cluster_silhouette_vals = silhouette_vals[labels_1 == cluster]
-                cluster_silhouette_vals.sort()
-                y_upper += len(cluster_silhouette_vals)
+    def grafico_codo(df:pd.DataFrame,max_clusters:int=9,semilla:int=None,
+                    optimo:int=None) -> px:
 
-                plt.barh(range(y_lower, y_upper), cluster_silhouette_vals, edgecolor='none', height=1,alpha=0.6)
-                plt.text(-0.03, (y_lower + y_upper) / 2, str(i + 1),weight="bold",fontsize="medium")
-                y_lower += len(cluster_silhouette_vals)
-
-        
-        avg_score = np.mean(silhouette_vals)
-        plt.axvline(avg_score, linestyle='--', linewidth=5, color='red')
-        plt.annotate(f"Silhouette Score:{round(avg_score,3)}",xy=(avg_score*1.1,y_upper/10),
-                    fontsize="x-large",fontfamily="fantasy")
-        plt.xlim([-0.06, 1])
-        plt.xlabel('Silhouette coefficient values')
-        plt.ylabel('Cluster labels')
-        plt.title('--Silhouette plot for {} clusters--'.format(len(np.unique(km.labels_))-1), y=1.02,
-                    fontsize="x-large",weight="bold",fontfamily="monospace",
-                    bbox=dict(boxstyle="Round4",alpha=0.3,color="grey"))
-        plt.show()
-
-    def grafico_codo(df,max_clusters=9,semilla=None,optimo=None):
         """Funcion que grafica el codo en KMeans para detectar los clusters óptimos
+
         ---------------------------------------
-        Args:
-        df = pd.DataFrame\n
-        max_clusters = (int) número máximo de clusters ha representar\n
-        semilla = (int)
-        optimo = (int) se puede poner despues de ver el gráfico para pintar una línea
+        # Args:
+            - df = pd.DataFrame
+            - max_clusters = (int) número máximo de clusters ha representar
+            - semilla = (int)
+            - optimo = (int) se puede poner despues de ver el gráfico para pintar una línea
+
+        ---------------------------------------
+        # Return:
+            gráfico de plotly.express
         """
         inertia = []
         for i in np.arange(2,max_clusters):
             km = KMeans(n_clusters=i,random_state=semilla).fit(df)
             inertia.append(km.inertia_)
-        # ahora dibujamos las difrentes distorsiones o inercias:
-        fig = px.line(x= np.arange(2,max_clusters), y= inertia,markers=True,title="|| K-Means Inertia ||",\
-                labels=dict(x="clusters",y="inertia")).add_vline(x=4,line_color="green")
-        fig.show()
 
-    def aplicacion_dbscan(df):
+        # ahora dibujamos las difrentes distorsiones o inercias:
+        fig = px.line(x= np.arange(2,max_clusters), y= inertia,markers=True,
+                        title="|| K-Means Inertia ||",
+                        labels=dict(x="clusters",y="inertia")).add_vline(x=optimo,
+                                                                line_color="green")
+        return fig.show()
+
+    def aplicacion_dbscan(df:pd.DataFrame) -> str:
 
         """Aplica el algoritmo DBSCAN y nos devuelve el número de clusters,
         los puntos de ruido y el coeficiente de silueta
         ------------------------------------
         # Args:
-            df=(pd.DataFrame)
+            - df=(pd.DataFrame)
 
         ------------------------------------
         # Return:
@@ -147,11 +172,25 @@ class Clustering:
 
 
 class Predicting:
+
     """Contiene los métodos de la fase de Regresión del proyecto co2"""
+
     def __init__(self):
         pass
 
-    def compute_vif(df,considered_features):
+    def compute_vif(df:pd.DataFrame,considered_features:list) -> pd.DataFrame:
+
+        """Función que realiza la prueba vif (Variance Inflator Factor ordenado
+        de mayor a menor valor
+        
+        ----------------------------------------------
+        # Args:
+            - df: (pd.DataFrame) variables a comprobar
+            - considered_features: (list) lista de variables a comprobar
+        
+        -----------------------------------------------
+        # Return:
+            pd.DataFrame"""
         
         X = df.loc[:,considered_features]
         X['intercept'] = 1
@@ -163,7 +202,30 @@ class Predicting:
         return vif.sort_values(by="VIF",ascending=False).reset_index().drop(columns="index").round(2)
 
 
-    def cross_val_regression(estimador,xtrain,ytrain,xtest,ytest,pred="no",grafico="si"):
+    def cross_val_regression(estimador:any,xtrain:Union[pd.DataFrame,np.ndarray],
+                            ytrain:Union[pd.DataFrame,np.ndarray],
+                            xtest:Union[pd.DataFrame,np.ndarray],
+                            ytest:Union[pd.DataFrame,np.ndarray],pred:str="no",
+                            grafico:str="si") -> Union[any,pd.DataFrame,np.ndarray]:
+                        
+        """Función que devuelve las métricas r2, mae y mse hechas mediante un
+        cross validation y puede devolver un gráfico comparativo de la realidad
+        con la predicción para comprobar el ajuste del modelo
+        
+        -----------------------------------------
+        # Args:
+            - estimador: algoritmo de regresión con métricas r2, mae y mse
+            - xtrain: (pd.DataFrame,np.ndarray) features train
+            - ytrain: (pd.DataFrame,np.ndarray) target train
+            - xtest:  (pd.DataFrame,np.ndarray) features train
+            - ytest: (pd.DataFrame,np.ndarray) target test
+            - pred: (str) si o no para decidir si devolver las predicciones
+            - grafico: (str) si o no para decidir si devuelve el gráfico
+        
+        -----------------------------------------
+        # Return:
+            Gráfico de seaborn y pd.DataFrame or np.ndarray"""
+
         lr = estimador
         lr.fit(xtrain,ytrain)
         predic = lr.predict(xtest)
@@ -191,12 +253,19 @@ class Predicting:
         if pred == "si":
             return predic
 
-    def sin_multico_unoauno(df,variables):
+    def sin_multico_unoauno(df:pd.DataFrame,variables:list) -> pd.DataFrame:
+
         """Función que elimina de una en una las variables con vif superior a 5
+
         -----------------------------------
-        Args:
-        df = (pd.DataFrame)
-        variables = (list) variables a tener en cuenta"""
+        # Args:
+            - df: (pd.DataFrame)
+            - variables: (list) variables a tener en cuenta
+        
+        -----------------------------------
+        # Return:
+            pd.DataFrame
+        """
         
         try:
             df_vif = Predicting.compute_vif(df,variables).round(2)
@@ -212,20 +281,27 @@ class Predicting:
 
 
 class Classification:
+
+    """Contiene los métodos de la fase de Regresión del proyecto co2"""
+
     def __init__(self):
         pass
 
-    def new_classification_report(realidad,prediccion):
+    def new_classification_report(realidad:Union[np.ndarray,pd.Series],
+                                prediccion:Union[np.ndarray,pd.Series]) -> any:
+
         """Función que le añade al classification report la confussion matrix
+
         -----------------------------------
         # Args:
-            realidad: (y_test:np.array | pd.Series) (los datos reales de set de test)\n
-            prediccion: (pred:np.array | pd.Series) (predicción del estimador)
+            - realidad: (y_test:np.array | pd.Series) (los datos reales de set de test)
+            - prediccion: (pred:np.array | pd.Series) (predicción del estimador)
 
         ------------------------------------
         # Return:
-        Resúmen de las métricas Accuracy,Precision,Recall,F1,support, 
-        confussion matrix"""
+            Resúmen de las métricas Accuracy,Precision,Recall,F1,support, 
+            confussion matrix
+        """
         
         sns.heatmap(confusion_matrix(realidad,prediccion),annot=True,
                                     fmt="g",cmap="Greys_r")
@@ -238,22 +314,25 @@ class Classification:
         print(classification_report(realidad,prediccion))
         
 
-    def multiclass_report_bycluster(df,target,l_vars,l_estim,metrica,splits,
-                                    shuffle=False,seed=None):
+    def multiclass_report_bycluster(df:pd.DataFrame,target:str,
+                                    l_vars:list,l_estim:list,metrica:str,
+                                    splits:int,shuffle:bool=False,
+                                    seed:int=None) -> Union[any,pd.DataFrame]:
 
         """Función que calcula la métrica elegida (Precision,Recall o F1) para cada
         uno de los estimadores seleccionados junto con sus variables elegidas de manera
         individualizada para cada cluster en modelos de clasificación multiclase
+
         ----------------------------------
         # Args:
-            df: (pd.DataFrame) dataframe completo
-            target: (str) variable objetivo
-            l_vars: (list) lista de listas con las variables para cada estimador
-            l_estim: (list) lista con los estimadores a usar, len(l_estim) = len(l_vars)
-            metrica: (str) Precision, Recall o F1
-            splits: (int) número de splits a realizar por KFold
-            shuffle: (bool) si True aleatoriza las muestras
-            seed: (int) para obtener resultados entre pruebas
+            - df: (pd.DataFrame) dataframe completo
+            - target: (str) variable objetivo
+            - l_vars: (list) lista de listas con las variables para cada estimador
+            - l_estim: (list) lista con los estimadores a usar, len(l_estim) = len(l_vars)
+            - metrica: (str) Precision, Recall o F1
+            - splits: (int) número de splits a realizar por KFold
+            - shuffle: (bool) si True aleatoriza las muestras
+            - seed: (int) para obtener resultados entre pruebas
 
         ----------------------------------
         # Return
