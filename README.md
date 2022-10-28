@@ -4,7 +4,7 @@
 A three phased machine learning project for predicting countries' co2 emissions and classifies them into beforehand made clusters
 
 ## Description:
-From a dataset gathered from kaggle where we can find information about energy for the majority of the world countries we are trying to predict the co2 this countries are going to produce based on the specific characteristics of them, which have been clusterisized before the prediction, and after this prediction they are going to be classificated into a category with the aim of developing a tool that enables us to simulate scenarios in base of the computed data of certain variables so the countries are going to be best informed about how to drive the future environmental policies or a base to assign public subsidies to the countries that behaves better, environmentally speaking.
+From a dataset gathered from kaggle where we can find information about energy for the majority of the world countries we are trying to predict the co2 this countries are going to produce based on the specific characteristics of them, which have been clusterisized before the prediction, and after this prediction they are going to be classified into a category with the aim of developing a tool that enables us to simulate scenarios in base of the computed data of certain variables so the countries are going to be best informed about how to drive the future environmental policies or a base to assign public subsidies to the countries that behaves better, environmentally speaking.
 
 ### The Dataset:
 In its origin, and after the EDA phase, the dataset is conformed of the following variables for the greatest energy producers:
