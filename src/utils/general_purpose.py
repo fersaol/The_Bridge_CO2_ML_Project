@@ -193,7 +193,7 @@ def data_transform(df:pd.DataFrame,target:pd.DataFrame,
     x = df.drop(columns=skip_x)
     y = df[target]
     x_train,x_test,y_train,y_test = train_test_split(x,y,test_size=test_size,
-                                                    random_state=1234)
+                                                    shuffle=True)
 
     #Transformación
     transformer = make_column_transformer((transformer,

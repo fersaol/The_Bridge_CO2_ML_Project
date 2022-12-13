@@ -1,19 +1,25 @@
 import numpy as np
 import pandas as pd
+import sys
+import os
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans,DBSCAN
 from sklearn.metrics import silhouette_samples,silhouette_score,confusion_matrix,\
                             classification_report,precision_score,recall_score,\
-                            f1_score
+                            f1_score, r2_score, mean_absolute_error,mean_squared_error
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from statsmodels.stats.outliers_influence import variance_inflation_factor
-from sklearn.model_selection import cross_val_score,KFold
+from sklearn.model_selection import cross_val_score,KFold, RepeatedKFold,\
+                                    validation_curve, learning_curve,\
+                                    RandomizedSearchCV,GridSearchCV
+from sklearn.preprocessing import PowerTransformer
 import seaborn as sns
 from sklearn.feature_selection import RFECV
 from typing import Union
-
+sys.path.append(os.getcwd())
+import general_purpose as gp
 print("Hey!, el módulo co2 ha sido importado correctamente \U0001F973")
 
 
@@ -226,18 +232,37 @@ class Predicting:
         # Return:
             Gráfico de seaborn y pd.DataFrame or np.ndarray"""
 
+        cvr = RepeatedKFold()
+
+        # We first cross validate the data
+        r2 = cross_val_score(estimador,xtrain,ytrain,scoring="r2",cv=cvr).mean()
+        mae = abs(cross_val_score(estimador,xtrain,ytrain,
+                            scoring="neg_mean_absolute_error",cv=cvr).mean())
+        mse = abs(cross_val_score(estimador,xtrain,ytrain,
+                            scoring="neg_mean_squared_error",cv=cvr).mean())
+        median = np.median(abs(cross_val_score(estimador,xtrain,ytrain,
+                            scoring="neg_median_absolute_error",cv=cvr)))
+
+        # Then we train and predict with the model:
         lr = estimador
         lr.fit(xtrain,ytrain)
         predic = lr.predict(xtest)
 
-        r2 = cross_val_score(lr,xtrain,ytrain,scoring="r2",cv=10).mean()
-        mae = abs(cross_val_score(lr,xtrain,ytrain,scoring="neg_mean_absolute_error",cv=10).mean())
-        mse = abs(cross_val_score(lr,xtrain,ytrain,scoring="neg_mean_squared_error",cv=10).mean())
+        # r2_test = r2_score(ytest,predic)
+        # mae_test = mean_absolute_error(ytest,predic)
+        # mse_test = mean_squared_error(ytest,predic)
 
-        texto = "r2: {}  mae: {}  mse: {}  rmse: {}".format(round(r2,3),round(mae,3),
-                                                        round(mse,3),
+        val_text = "r2: {}  mae: {}  median_ae: {}  rmse: {}".format(round(r2,3),
+                                                        round(mae,3),
+                                                        round(median,3),
                                                         round(mse**(1/2),3))
 
+        # test_text = "r2: {}  mae: {}  mse: {}  rmse: {}".format(round(r2_test,3),
+        #                                                 round(mae_test,3),
+        #                                                 round(mse_test,3),
+        #                                                 round(mse_test**(1/2),3))
+
+        # And finally we represent and compare the validation and test data
         box = {"facecolor":"grey", "alpha":0.2}
 
         if grafico == "si":
@@ -245,8 +270,16 @@ class Predicting:
             sns.scatterplot(x=ytest,y=ytest,label="realidad",color="red")
             sns.scatterplot(x=ytest,y=predic,label="predicción",color="green")
             plt.title("Realidad VS Predicción")
-            plt.figtext(s=texto,x=0.1287,y=-0.01,va="baseline",
+
+            plt.figtext(s="Validation Metrics",x=0.1287,y=-0.01,va="baseline",
+            weight="bold",fontsize="x-large")
+            plt.figtext(s=val_text,x=0.1287,y=-0.10,va="baseline",
             bbox=box,weight="bold",fontsize="x-large")
+
+            # plt.figtext(s="Test Metrics",x=0.1287,y=-0.20,va="baseline",
+            # weight="bold",fontsize="x-large")
+            # plt.figtext(s=test_text,x=0.1287,y=-0.30,va="baseline",
+            # bbox=box,weight="bold",fontsize="x-large")
 
             plt.show()
 
@@ -278,6 +311,190 @@ class Predicting:
         except KeyError:
             print("todas las variables han sido eliminadas al estar todas por encima de vif 5")
 
+    def metrics_comparison(x:pd.DataFrame,y:pd.Series,list_est:list) -> pd.DataFrame:
+
+        """Performs a comparison between estimators using mae, rmse and r2 metrics
+
+        -----------------------------------------------
+        # Args:
+            - x: (pd.DataFrame) features
+            - y: (pd.Series) target
+            -lista_estimadores: (list) list of estimators to compare
+
+        ----------------------------------------------
+        # Returns:
+            pd.DataFrame
+        """
+        resultados = {"r2":[],"mae":[],"median_mae":[]}
+        metrics = ["r2","neg_mean_absolute_error","neg_median_absolute_error"]
+        cvr = RepeatedKFold()
+
+        for i in range(len(list_est)):
+            for j in range(len(metrics)):
+                if metrics[j] == "r2":
+                    cv = cross_val_score(list_est[i],x,y,scoring=metrics[j],
+                                                            cv=cvr).mean()
+                else:
+                    pre_cv = np.abs(cross_val_score(list_est[i],x,y,scoring=metrics[j],
+                                                            cv=cvr))
+                    cv = np.median(pre_cv)
+                resultados[list(resultados.keys())[j]].append(cv)
+
+        ols_metrics = pd.DataFrame(resultados,
+                    index=[str(x)[:40] for x in list_est]).sort_values(by="r2",
+                                                                        ascending=False)
+        return ols_metrics
+
+    def dataset(df:pd.DataFrame,cl:int,include_vars:list,trans:any) -> pd.DataFrame:
+        """Función para crear train, test y cluster dataframes
+
+        ----------------------------------------
+        # Args:
+            - df: (pd.DataFrame) dataframe original
+            - cl: (int) cluster a filtrar
+            - include_vars: (list) lista de variables a incluir
+            - trans: (sklearn scaler) escalado a aplicar a los datos
+
+        ----------------------------------------    
+        # Return:
+            pd.Dataframe"""
+
+        df_tuning = df.select_dtypes(exclude="object").drop(["latitude","longitude"],axis=1)
+        df_cluster = df_tuning[df_tuning.clusters==cl].reset_index(drop=True)
+
+        exclude_vars = [x for x in df_cluster if x not in include_vars]
+
+        x_train,x_test,y_train,y_test = gp.data_transform(df_cluster,"eficiency",
+                                                    trans,
+                                                    skip_t=["energy_type"],
+                                                    skip_x=exclude_vars,
+                                                    test_size=0.3)
+
+        return df_cluster,x_train,x_test,y_train,y_test
+
+    def ml_selector(df_cluster:pd.DataFrame,x_train:pd.DataFrame,
+                    x_test:pd.DataFrame,y_train:pd.DataFrame,
+                    y_test:pd.DataFrame,estim:list) -> Union[pd.DataFrame,any]:
+        
+        """Función para validar los modelos, seleccionar el mejor y representarlo
+        
+        ---------------------------------------------------
+        # Args:
+            - df_cluster: (pd.DataFrame) dataframe filtrado por cluster
+            - x_train: (pd.DataFrame) features para el train
+            - x_test: (pd.DataFrame) features para el test
+            - y_train: (pd.DataFrame) target para el train
+            - y_test: (pd.DataFrame) target para el test
+            - estim: (list) lista de estimadores a validar
+            
+        ---------------------------------------------------
+        # Return:
+            pd.DataFrame, matplotlib.pyplot"""
+
+        metrics = Predicting.metrics_comparison(x_train,y_train,estim)
+
+        chosen = [x for x in estim if str(x)[:40] == metrics.index[0]][0]
+
+        plot = Predicting.cross_val_regression(chosen,x_train,y_train,x_test,y_test)
+
+        return metrics, plot
+
+    def val_curve_plot(df_cluster:pd.DataFrame,estim:list,include_vars:list,
+                                            p_name:str,p_range:any) -> plt:
+
+        """Función que realiza la validation curve en función del parámetro y el
+        rango del mismo dado
+        
+        -----------------------------------------------
+        #Args:
+            - df_cluster: (pd.DataFrame) datos filtrados por cluster
+            - estim: (list) estimador
+            - include_vars: (list) features a tener en cuenta
+            - p_name: (str) nombre del parámetro a estudiar
+            - p_range: (any) rango de valores del parámetro elegido
+            
+        -----------------------------------------------
+        #Return:
+            seaborn plot"""
+
+        x = df_cluster[include_vars]
+        y = df_cluster.eficiency
+        cv =RepeatedKFold()
+
+        train_score,val_score= validation_curve(estimator=estim,X=x,y=y,
+            param_name=p_name,param_range=p_range,cv=cv,scoring="r2",)
+
+        sns.lineplot(x=p_range,y=np.mean(train_score,1))
+        sns.lineplot(x=p_range,y=np.mean(val_score,1))
+        plt.title("Validation Curve")
+        plt.ylabel("R2")
+        plt.xlabel("Complexity Increase")
+        plt.legend(labels=["training_scores","validation_scores"])
+        plt.show()
+        plt.show()
+
+    def hiper_tune(estimador:any,params:dict,x_train:pd.DataFrame,
+                        y_train:pd.DataFrame,scor:str,hiper:str=None) -> any:
+
+        """Función que optimiza los hiperparámetros del estimador dado
+        
+        -----------------------------------------
+        #Args:
+            - estimador: (sklearn estimator) estimador para el gridsearchcv
+            - params: (dict) parámetros para optimizar
+            - x_train: (pd.DataFrame) features
+            - y_train: (pd.DataFrame) target
+            - scor: (str) scoring con el que seleccionar los mejores parámetros
+            - hiper: (str) método de optimización a usar GridSearch(poner grid) 
+                        o Randomized (no hace falta poner nada)
+            
+        -----------------------------------------
+        #Return:
+            sklearn best estimator (default:RandomizedSearchCV)"""
+
+        cv =RepeatedKFold()
+        
+        if hiper == "grid":
+            grid = GridSearchCV(estimador,param_grid=params,scoring=scor,
+            cv=cv).fit(x_train,y_train)
+        else:
+            grid = RandomizedSearchCV(estimador,param_distributions=params,scoring=scor,
+            cv=cv).fit(x_train,y_train)
+
+        print(f"best params: {grid.best_params_}")
+        print(f"best score: {grid.best_score_}")
+
+        return grid.best_estimator_
+
+    def learn_curve_plot(df_cluster:pd.DataFrame,include_vars:list,best:any,
+                        scor:str) -> any:
+
+        """Función que realiza el gráfico de la learning curve
+        
+        -------------------------------------------
+        #Args:
+            - df_cluster: (pd.DataFrame) dataframe del cluster 0
+            - include_vars: (list) features a tener en cuenta
+            - best: (sklearn estimator) mejor estimador del gridsearchcv
+            - scor: (str) métrica para representar
+        
+        -------------------------------------------
+        #Return:
+            seaborn plot"""
+
+        x = df_cluster[include_vars]
+        y = df_cluster.eficiency
+
+        train_sizes,train_scores,validation_scores = learning_curve(best,
+                                                    X=x,y=y,scoring=scor)
+
+        sns.lineplot(x=train_sizes,y=np.mean(train_scores,1))
+        sns.lineplot(x=train_sizes,y=np.mean(validation_scores,1))
+        plt.title("Learning Curve")
+        plt.ylabel(scor)
+        plt.xlabel("Training Size")
+        plt.legend(labels=["training_scores","validation_scores"])
+        plt.show()
 
 
 class Classification:
